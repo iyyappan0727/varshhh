@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Varshhhh &mdash; Will You Be Mine Forever?</title>
+
+    <!-- Fonts: a romantic display script for the name, an elegant serif for the message, a clean sans for UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,500&family=Great+Vibes&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- ===================== CANVAS LAYERS (behind everything, for particles/hearts/etc.) ===================== -->
+    <canvas id="bg-canvas"></canvas>
+    <!-- aurora + stars + floating particles, always running -->
+    <canvas id="fx-canvas"></canvas>
+    <!-- one-shot bursts: hearts, confetti, fireworks, glitter -->
+
+    <!-- ===================== SCENE 0 — LOADER ===================== -->
+    <section id="scene-loader" class="scene scene--active">
+        <div class="loader-ring" aria-hidden="true">
+            <span class="loader-heart">&#10084;</span>
+        </div>
+        <p class="loader-label">weaving something beautiful<span class="dots"><span>.</span><span>.</span><span>.</span></span>
+        </p>
+    </section>
+
+    <!-- ===================== SCENE 1 — TAP TO BEGIN ===================== -->
+    <section id="scene-gate" class="scene">
+        <div class="gate-glow" aria-hidden="true"></div>
+        <div class="gate-content">
+            <p class="gate-eyebrow">a small universe, made for</p>
+            <h1 class="gate-title">Varshhhh</h1>
+            <button id="btn-begin" class="tap-begin" type="button">
+      <span class="tap-begin__ring"></span>
+      <span class="tap-begin__label">Tap Anywhere to Begin</span>
+      <span class="tap-begin__heart">&#10084;</span>
+    </button>
+        </div>
+        <div class="gate-hint">turn your sound on <span aria-hidden="true">&#127925;</span></div>
+    </section>
+
+    <!-- ===================== SCENE 2 — NAME REVEAL ===================== -->
+    <section id="scene-name" class="scene">
+        <div class="stage-frame">
+            <div id="name-letters" class="name-letters" aria-label="Varshhhh"></div>
+            <p id="name-combined" class="name-combined">&#10084;&#65039; Varshhhh &#10084;&#65039;</p>
+        </div>
+    </section>
+
+    <!-- ===================== SCENE 3 — LOVE MESSAGES ===================== -->
+    <section id="scene-message" class="scene">
+        <div class="message-stage">
+            <div class="message-quote-mark" aria-hidden="true">&#8220;</div>
+            <p id="message-text" class="message-text"></p>
+            <div class="message-progress" id="message-progress"></div>
+        </div>
+    </section>
+
+    <!-- ===================== SCENE 4 — THE PROPOSAL ===================== -->
+    <section id="scene-proposal" class="scene">
+        <div class="proposal-stage">
+
+            <div class="ring-wrap" aria-hidden="true">
+                <div class="ring-glow"></div>
+                <svg class="ring-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#ffe9b0"/>
+            <stop offset="45%" stop-color="#ffd54a"/>
+            <stop offset="100%" stop-color="#c8891a"/>
+          </linearGradient>
+          <radialGradient id="gemGrad" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="35%" stop-color="#bdf2ff"/>
+            <stop offset="70%" stop-color="#5bd3ff"/>
+            <stop offset="100%" stop-color="#1a8fd1"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="100" cy="170" rx="52" ry="52" fill="none" stroke="url(#bandGrad)" stroke-width="12"/>
+        <g class="ring-gem">
+          <polygon points="100,60 130,95 116,150 84,150 70,95" fill="url(#gemGrad)" stroke="#fff" stroke-width="1.5"/>
+          <polygon points="70,95 100,60 130,95" fill="#ffffff" opacity="0.55"/>
+          <polygon points="84,150 100,60 116,150" fill="#ffffff" opacity="0.18"/>
+          <line x1="70" y1="95" x2="130" y2="95" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+        </g>
+      </svg>
+                <div class="ring-sparkle ring-sparkle--1">&#10022;</div>
+                <div class="ring-sparkle ring-sparkle--2">&#10022;</div>
+                <div class="ring-sparkle ring-sparkle--3">&#10022;</div>
+            </div>
+
+            <h2 class="proposal-question">Will You Be Mine <span>Forever?</span></h2>
+
+            <div class="proposal-buttons">
+                <button id="btn-yes" class="btn-proposal btn-proposal--yes" type="button">YES &#10084;&#65039;</button>
+                <button id="btn-no" class="btn-proposal btn-proposal--no" type="button">NO &#128584;</button>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ===================== SCENE 5 — FINAL THANK YOU ===================== -->
+    <section id="scene-final" class="scene">
+        <div class="final-stage">
+            <div class="final-halo" aria-hidden="true"></div>
+            <p class="final-eyebrow">forever starts now</p>
+            <h2 class="final-title">Thank You,<br><span>Varshhhh</span> &#10084;&#65039;</h2>
+            <p class="final-sub">every tomorrow, with you.</p>
+        </div>
+    </section>
+
+    <!-- floating "no" button decoy target lives inline in scene-proposal via JS -->
+
+    <!-- optional soft background music; user must tap to enable per browser autoplay rules -->
+    <audio id="bg-music" loop preload="none">
+  <!-- No bundled audio file: hook left ready for the user to drop their own track in as music.mp3 -->
+  <source src="Moonu Bike Ride (Reprise) - Narhen Ellalan - Topic (128k).mp3" type="audio/mpeg">
+</audio>
+
+    <button id="btn-mute" class="btn-mute" type="button" aria-label="Toggle music">&#127925;</button>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
