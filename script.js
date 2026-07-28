@@ -1,714 +1,539 @@
-/* =====================================================================
-   VARSHHHH — PROPOSAL EXPERIENCE
-   Vanilla JS. No dependencies. Two canvases:
-     bgCanvas  -> ambient aurora stars + floating glow particles (always on)
-     fxCanvas  -> one-shot bursts: hearts, confetti, fireworks, roses,
-                  glitter, bubbles, butterflies, lens flare
-   ===================================================================== */
+/* =========================================================================
+   VARSHHHH — Premium Romantic Proposal Experience
+   Vanilla JS — scene orchestration + particle systems
+   All animations run on transform/opacity for smooth 60fps performance.
+   ========================================================================= */
+
 (() => {
     'use strict';
 
-    /* ---------------------------------------------------------------
-       0. UTILITIES
-    --------------------------------------------------------------- */
+    /* ----------------------------- helpers ----------------------------- */
+    const $ = (sel, ctx = document) => ctx.querySelector(sel);
+    const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
     const rand = (min, max) => Math.random() * (max - min) + min;
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-    const $ = (sel) => document.querySelector(sel);
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    /* ---------------------------------------------------------------
-       1. CANVAS SETUP
-    --------------------------------------------------------------- */
-    const bgCanvas = $('#bg-canvas');
-    const fxCanvas = $('#fx-canvas');
-    const bgCtx = bgCanvas.getContext('2d');
-    const fxCtx = fxCanvas.getContext('2d');
+    const field = $('#particle-field');
+    const body = document.body;
 
-    let W = 0,
-        H = 0,
-        DPR = Math.min(window.devicePixelRatio || 1, 2);
+    /* =====================================================================
+       1. STARFIELD (canvas) — twinkling stars behind everything
+       ===================================================================== */
+    const canvas = $('#star-canvas');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
 
-    function resize() {
-        W = window.innerWidth;
-        H = window.innerHeight;
-        [bgCanvas, fxCanvas].forEach(c => {
-            c.width = W * DPR;
-            c.height = H * DPR;
-            c.style.width = W + 'px';
-            c.style.height = H + 'px';
-        });
-        bgCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
-        fxCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    function sizeCanvas() {
+        canvas.width = window.innerWidth * devicePixelRatio;
+        canvas.height = window.innerHeight * devicePixelRatio;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     }
-    window.addEventListener('resize', resize);
-    resize();
 
-    /* ---------------------------------------------------------------
-       2. AMBIENT BACKGROUND — twinkling stars + floating glow orbs
-    --------------------------------------------------------------- */
-    const STAR_COUNT = window.innerWidth < 600 ? 70 : 140;
-    const stars = Array.from({ length: STAR_COUNT }, () => ({
-        x: rand(0, W),
-        y: rand(0, H),
-        r: rand(0.5, 1.8),
-        tw: rand(0, Math.PI * 2),
-        speed: rand(0.01, 0.03),
-    }));
+    function initStars() {
+        const count = Math.min(140, Math.floor((window.innerWidth * window.innerHeight) / 9000));
+        stars = Array.from({ length: count }, () => ({
+            x: rand(0, window.innerWidth),
+            y: rand(0, window.innerHeight),
+            r: rand(0.5, 1.8),
+            phase: rand(0, Math.PI * 2),
+            speed: rand(0.01, 0.03),
+        }));
+    }
 
-    const ORB_COUNT = window.innerWidth < 600 ? 10 : 18;
-    const glowColors = ['255,47,146', '55,230,255', '255,213,74', '155,107,255', '255,159,208'];
-    const orbs = Array.from({ length: ORB_COUNT }, () => ({
-        x: rand(0, W),
-        y: rand(0, H),
-        r: rand(30, 90),
-        vx: rand(-0.12, 0.12),
-        vy: rand(-0.18, -0.05),
-        color: pick(glowColors),
-        alpha: rand(0.05, 0.14),
-    }));
-
-    function drawBackground() {
-        bgCtx.clearRect(0, 0, W, H);
-
-        // twinkling stars
+    function drawStars(t) {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
         for (const s of stars) {
-            s.tw += s.speed;
-            const a = 0.4 + Math.sin(s.tw) * 0.4;
-            bgCtx.beginPath();
-            bgCtx.fillStyle = `rgba(255,255,255,${clamp(a, 0.05, 0.9)})`;
-            bgCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-            bgCtx.fill();
+            const twinkle = 0.5 + 0.5 * Math.sin(t * s.speed + s.phase);
+            ctx.globalAlpha = 0.25 + twinkle * 0.75;
+            ctx.fillStyle = '#fdf6ff';
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fill();
         }
-
-        // floating glow orbs (soft bloom particles)
-        for (const o of orbs) {
-            o.x += o.vx;
-            o.y += o.vy;
-            if (o.y < -o.r) { o.y = H + o.r;
-                o.x = rand(0, W); }
-            if (o.x < -o.r) o.x = W + o.r;
-            if (o.x > W + o.r) o.x = -o.r;
-
-            const g = bgCtx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
-            g.addColorStop(0, `rgba(${o.color},${o.alpha})`);
-            g.addColorStop(1, `rgba(${o.color},0)`);
-            bgCtx.fillStyle = g;
-            bgCtx.beginPath();
-            bgCtx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
-            bgCtx.fill();
-        }
+        ctx.globalAlpha = 1;
+        if (!reducedMotion) requestAnimationFrame(drawStars);
     }
 
-    /* ---------------------------------------------------------------
-       3. FX PARTICLE ENGINE — one shared pool, typed particles
-    --------------------------------------------------------------- */
-    let fxParticles = [];
+    sizeCanvas();
+    initStars();
+    requestAnimationFrame(drawStars);
+    window.addEventListener('resize', () => { sizeCanvas();
+        initStars(); });
 
-    function spawnHeartBurst(cx, cy, count = 40, power = 1) {
-        for (let i = 0; i < count; i++) {
-            const angle = rand(0, Math.PI * 2);
-            const speed = rand(2, 6) * power;
-            fxParticles.push({
-                type: 'heart',
-                x: cx,
-                y: cy,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed - 1,
-                size: rand(10, 22),
-                rot: rand(0, Math.PI * 2),
-                vr: rand(-0.06, 0.06),
-                color: pick(['#ff2f92', '#ff9fd0', '#ffd54a', '#9b6bff']),
-                life: 0,
-                maxLife: rand(70, 120),
-                gravity: 0.045,
-            });
-        }
+    /* =====================================================================
+       2. GENERIC PARTICLE SPAWNER
+       Spawns a lightweight absolutely-positioned element, animates it with
+       a CSS keyframe (assigned via class), then removes it from the DOM.
+       ===================================================================== */
+    function spawnParticle({
+        parent = field,
+        html = '❤',
+        className = 'p-heart',
+        left = rand(0, 100) + 'vw',
+        top = '105vh',
+        size = rand(14, 26),
+        duration = rand(4, 8),
+        delay = 0,
+        animName = 'floatUp',
+        dx = rand(-80, 80) + 'px',
+        dy = rand(-40, 40) + 'px',
+        rot = rand(180, 720) + 'deg',
+        style = {},
+    } = {}) {
+        const el = document.createElement('div');
+        el.className = `floaty ${className}`;
+        el.innerHTML = html;
+        el.style.left = left;
+        el.style.top = top;
+        el.style.fontSize = size + 'px';
+        el.style.setProperty('--drift', dx);
+        el.style.setProperty('--dx', dx);
+        el.style.setProperty('--dy', dy);
+        el.style.setProperty('--rot', rot);
+        el.style.animation = `${animName} ${duration}s ease-in ${delay}s forwards`;
+        Object.assign(el.style, style);
+        parent.appendChild(el);
+        setTimeout(() => el.remove(), (duration + delay) * 1000 + 200);
+        return el;
     }
 
-    function spawnFireworkHearts(cx, cy) {
-        // a ring of tiny hearts that bursts outward then twinkles, like a firework
-        const count = 26;
-        for (let i = 0; i < count; i++) {
-            const angle = (Math.PI * 2 * i) / count;
-            const speed = rand(3.5, 5.5);
-            fxParticles.push({
-                type: 'firework-heart',
-                x: cx,
-                y: cy,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                size: rand(8, 14),
-                color: pick(['#ff2f92', '#37e6ff', '#ffd54a', '#ff9fd0']),
-                life: 0,
-                maxLife: rand(50, 80),
-                gravity: 0.02,
-            });
-        }
-    }
-
-    function spawnConfetti(count = 60) {
-        for (let i = 0; i < count; i++) {
-            fxParticles.push({
-                type: 'confetti',
-                x: rand(0, W),
-                y: rand(-60, -10),
-                vx: rand(-1, 1),
-                vy: rand(2, 4.5),
-                size: rand(6, 11),
-                rot: rand(0, Math.PI * 2),
-                vr: rand(-0.15, 0.15),
-                color: pick(['#ff2f92', '#37e6ff', '#ffd54a', '#9b6bff', '#ff9fd0', '#ffffff']),
-                life: 0,
-                maxLife: rand(220, 320),
-                gravity: 0.01,
-                sway: rand(0.02, 0.05),
-                swayOff: rand(0, Math.PI * 2),
-            });
-        }
-    }
-
-    function spawnRoses(count = 14) {
-        for (let i = 0; i < count; i++) {
-            fxParticles.push({
-                type: 'rose',
-                x: rand(0, W),
-                y: rand(-80, -20),
-                vx: rand(-0.3, 0.3),
-                vy: rand(1, 2.2),
-                size: rand(16, 28),
-                rot: rand(0, Math.PI * 2),
-                vr: rand(-0.02, 0.02),
-                life: 0,
-                maxLife: rand(260, 380),
-                sway: rand(0.01, 0.03),
-                swayOff: rand(0, Math.PI * 2),
-            });
-        }
-    }
-
-    function spawnGlitter(count = 50) {
-        for (let i = 0; i < count; i++) {
-            const angle = rand(0, Math.PI * 2);
-            const speed = rand(1, 5);
-            fxParticles.push({
-                type: 'glitter',
-                x: W / 2,
-                y: H / 2,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                size: rand(1.5, 3.5),
-                color: pick(['#ffd54a', '#ffffff', '#37e6ff', '#ff9fd0']),
-                life: 0,
-                maxLife: rand(60, 100),
-                gravity: 0.02,
-            });
-        }
-    }
-
-    function spawnBubbles(count = 12) {
-        for (let i = 0; i < count; i++) {
-            fxParticles.push({
-                type: 'bubble',
-                x: rand(0, W),
-                y: H + rand(0, 100),
-                vx: rand(-0.3, 0.3),
-                vy: rand(-1.4, -0.7),
-                size: rand(8, 22),
-                life: 0,
-                maxLife: rand(260, 400),
-                sway: rand(0.01, 0.03),
-                swayOff: rand(0, Math.PI * 2),
-            });
-        }
-    }
-
-    function spawnButterflies(count = 5) {
-        for (let i = 0; i < count; i++) {
-            fxParticles.push({
-                type: 'butterfly',
-                x: rand(0, W),
-                y: rand(H * 0.3, H * 0.9),
-                baseY: 0,
-                angle: rand(0, Math.PI * 2),
-                speed: rand(0.8, 1.6),
-                flap: rand(0, Math.PI * 2),
-                color: pick(['#ff2f92', '#ffd54a', '#37e6ff', '#ff9fd0']),
-                size: rand(10, 16),
-                life: 0,
-                maxLife: rand(400, 700),
-            });
-        }
-    }
-
-    function spawnSparkleTrail(x, y) {
-        fxParticles.push({
-            type: 'sparkle',
-            x,
-            y,
-            vx: rand(-0.4, 0.4),
-            vy: rand(-0.6, -0.1),
-            size: rand(2, 4),
-            life: 0,
-            maxLife: rand(30, 50),
-            color: pick(['#ffd54a', '#ffffff', '#ff9fd0']),
+    /* --- ambient background loop: gentle hearts + glitter always drifting --- */
+    function ambientLoop() {
+        if (reducedMotion) return;
+        spawnParticle({
+            html: pick(['❤', '✦', '✧']),
+            className: pick(['p-heart', 'p-glitter']),
+            size: rand(8, 16),
+            duration: rand(8, 14),
+            animName: 'floatUp',
+            dx: rand(-40, 40) + 'px',
+            style: { opacity: 0.5 },
         });
+        setTimeout(ambientLoop, rand(900, 1800));
+    }
+    ambientLoop();
+
+    /* =====================================================================
+       3. SCENE MANAGEMENT
+       ===================================================================== */
+    const scenes = {
+        loading: $('#scene-loading'),
+        burst: $('#scene-burst'),
+        name: $('#scene-name'),
+        messages: $('#scene-messages'),
+        proposal: $('#scene-proposal'),
+        final: $('#scene-final'),
+    };
+
+    function goTo(id) {
+        Object.values(scenes).forEach((s) => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
     }
 
-    // lens flare — single fading radial burst, drawn as a short-lived special entry
-    function spawnLensFlare(cx, cy) {
-        fxParticles.push({
-            type: 'lensflare',
-            x: cx,
-            y: cy,
-            life: 0,
-            maxLife: 55,
-        });
-    }
-
-    /* ---- heart shape path helper (used by heart + firework-heart) ---- */
-    function heartPath(ctx, size) {
-        ctx.beginPath();
-        const s = size / 16;
-        ctx.moveTo(0, 4 * s);
-        ctx.bezierCurveTo(0, 2 * s, -2 * s, 0, -6 * s, 0);
-        ctx.bezierCurveTo(-11 * s, 0, -11 * s, 6.5 * s, -11 * s, 6.5 * s);
-        ctx.bezierCurveTo(-11 * s, 10 * s, -7 * s, 13.5 * s, 0, 18 * s);
-        ctx.bezierCurveTo(7 * s, 13.5 * s, 11 * s, 10 * s, 11 * s, 6.5 * s);
-        ctx.bezierCurveTo(11 * s, 6.5 * s, 11 * s, 0, 6 * s, 0);
-        ctx.bezierCurveTo(2 * s, 0, 0, 2 * s, 0, 4 * s);
-        ctx.closePath();
-    }
-
-    function updateAndDrawFx() {
-        fxCtx.clearRect(0, 0, W, H);
-        fxParticles = fxParticles.filter(p => p.life < p.maxLife);
-
-        for (const p of fxParticles) {
-            p.life++;
-            const t = p.life / p.maxLife;
-            const fade = 1 - t;
-
-            switch (p.type) {
-                case 'heart':
-                case 'firework-heart':
-                    {
-                        p.vy += p.gravity;
-                        p.x += p.vx;p.y += p.vy;
-                        p.vx *= 0.99;
-                        p.rot = (p.rot || 0) + (p.vr || 0);
-                        fxCtx.save();
-                        fxCtx.translate(p.x, p.y);
-                        fxCtx.rotate(p.rot || 0);
-                        fxCtx.globalAlpha = clamp(fade, 0, 1);
-                        fxCtx.fillStyle = p.color;
-                        fxCtx.shadowColor = p.color;
-                        fxCtx.shadowBlur = 14;
-                        heartPath(fxCtx, p.size);
-                        fxCtx.fill();
-                        fxCtx.restore();
-                        break;
-                    }
-                case 'confetti':
-                    {
-                        p.vy += p.gravity;
-                        p.x += p.vx + Math.sin(p.life * p.sway + p.swayOff) * 1.1;
-                        p.y += p.vy;
-                        p.rot += p.vr;
-                        fxCtx.save();
-                        fxCtx.translate(p.x, p.y);
-                        fxCtx.rotate(p.rot);
-                        fxCtx.globalAlpha = t > 0.85 ? clamp((1 - t) / 0.15, 0, 1) : 1;
-                        fxCtx.fillStyle = p.color;
-                        fxCtx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
-                        fxCtx.restore();
-                        break;
-                    }
-                case 'rose':
-                    {
-                        p.x += p.vx + Math.sin(p.life * p.sway + p.swayOff) * 0.6;
-                        p.y += p.vy;
-                        p.rot += p.vr;
-                        fxCtx.save();
-                        fxCtx.translate(p.x, p.y);
-                        fxCtx.rotate(p.rot);
-                        fxCtx.globalAlpha = t > 0.85 ? clamp((1 - t) / 0.15, 0, 1) : 0.9;
-                        fxCtx.font = `${p.size}px serif`;
-                        fxCtx.textAlign = 'center';
-                        fxCtx.textBaseline = 'middle';
-                        fxCtx.fillText('\u{1F339}', 0, 0);
-                        fxCtx.restore();
-                        break;
-                    }
-                case 'glitter':
-                case 'sparkle':
-                    {
-                        p.vy = (p.vy || 0) + (p.gravity || 0);
-                        p.x += p.vx;p.y += p.vy;
-                        fxCtx.save();
-                        fxCtx.globalAlpha = clamp(fade, 0, 1);
-                        fxCtx.fillStyle = p.color;
-                        fxCtx.shadowColor = p.color;
-                        fxCtx.shadowBlur = 8;
-                        fxCtx.beginPath();
-                        fxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                        fxCtx.fill();
-                        fxCtx.restore();
-                        break;
-                    }
-                case 'bubble':
-                    {
-                        p.x += p.vx + Math.sin(p.life * p.sway + p.swayOff) * 0.5;
-                        p.y += p.vy;
-                        fxCtx.save();
-                        fxCtx.globalAlpha = 0.35 * (t > 0.85 ? clamp((1 - t) / 0.15, 0, 1) : 1);
-                        fxCtx.strokeStyle = '#bdf2ff';
-                        fxCtx.lineWidth = 1.4;
-                        fxCtx.beginPath();
-                        fxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                        fxCtx.stroke();
-                        fxCtx.restore();
-                        break;
-                    }
-                case 'butterfly':
-                    {
-                        p.flap += 0.25;
-                        p.angle += rand(-0.03, 0.03);
-                        p.x += Math.cos(p.angle) * p.speed;
-                        p.y += Math.sin(p.angle) * p.speed * 0.6 + Math.sin(p.life * 0.05) * 0.4;
-                        if (p.x < -20) p.x = W + 20;
-                        if (p.x > W + 20) p.x = -20;
-                        if (p.y < -20) p.y = H + 20;
-                        if (p.y > H + 20) p.y = -20;
-                        const wing = Math.sin(p.flap) * 0.9;
-                        fxCtx.save();
-                        fxCtx.translate(p.x, p.y);
-                        fxCtx.rotate(p.angle);
-                        fxCtx.globalAlpha = t > 0.9 ? clamp((1 - t) / 0.1, 0, 1) : 0.85;
-                        fxCtx.fillStyle = p.color;
-                        fxCtx.shadowColor = p.color;fxCtx.shadowBlur = 6;
-                        // left wing
-                        fxCtx.save();fxCtx.scale(wing, 1);
-                        fxCtx.beginPath();fxCtx.ellipse(-p.size * 0.5, 0, p.size * 0.6, p.size * 0.9, 0, 0, Math.PI * 2);fxCtx.fill();
-                        fxCtx.restore();
-                        // right wing
-                        fxCtx.save();fxCtx.scale(wing, 1);
-                        fxCtx.beginPath();fxCtx.ellipse(p.size * 0.5, 0, p.size * 0.6, p.size * 0.9, 0, 0, Math.PI * 2);fxCtx.fill();
-                        fxCtx.restore();
-                        fxCtx.restore();
-                        break;
-                    }
-                case 'lensflare':
-                    {
-                        const cx = p.x,
-                            cy = p.y;
-                        fxCtx.save();
-                        fxCtx.globalAlpha = fade * 0.8;
-                        const g = fxCtx.createRadialGradient(cx, cy, 0, cx, cy, 220);
-                        g.addColorStop(0, 'rgba(255,255,255,0.9)');
-                        g.addColorStop(0.25, 'rgba(255,213,74,0.35)');
-                        g.addColorStop(1, 'rgba(255,47,146,0)');
-                        fxCtx.fillStyle = g;
-                        fxCtx.beginPath();
-                        fxCtx.arc(cx, cy, 220, 0, Math.PI * 2);
-                        fxCtx.fill();
-                        // rays
-                        fxCtx.translate(cx, cy);
-                        fxCtx.rotate(p.life * 0.02);
-                        fxCtx.strokeStyle = 'rgba(255,255,255,0.5)';
-                        fxCtx.lineWidth = 1;
-                        for (let i = 0; i < 8; i++) {
-                            const a = (Math.PI / 4) * i;
-                            fxCtx.beginPath();
-                            fxCtx.moveTo(0, 0);
-                            fxCtx.lineTo(Math.cos(a) * 260, Math.sin(a) * 260);
-                            fxCtx.stroke();
-                        }
-                        fxCtx.restore();
-                        break;
-                    }
-            }
-        }
-    }
-
-    /* ---------------------------------------------------------------
-       4. MAIN RENDER LOOP
-    --------------------------------------------------------------- */
-    function loop() {
-        if (!reduceMotion) drawBackground();
-        updateAndDrawFx();
-        requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-
-    // gentle continuous butterflies + occasional glitter once the show begins
-    let ambientButterfliesStarted = false;
-
-    function startAmbientLife() {
-        if (ambientButterfliesStarted) return;
-        ambientButterfliesStarted = true;
-        spawnButterflies(4);
-        setInterval(() => spawnButterflies(2), 9000);
-        setInterval(() => spawnBubbles(6), 6000);
-    }
-
-    /* ---------------------------------------------------------------
-       5. SCENE MANAGER
-    --------------------------------------------------------------- */
-    const scenes = ['scene-loader', 'scene-gate', 'scene-name', 'scene-message', 'scene-proposal', 'scene-final'];
-
-    function goToScene(id) {
-        scenes.forEach(s => $('#' + s).classList.toggle('scene--active', s === id));
-    }
-
-    /* ---------------------------------------------------------------
-       6. LOADER -> GATE
-    --------------------------------------------------------------- */
-    setTimeout(() => {
-        goToScene('scene-gate');
-    }, 2200);
-
-    /* ---------------------------------------------------------------
-       7. GATE -> BEGIN THE EXPERIENCE
-    --------------------------------------------------------------- */
+    /* =====================================================================
+       4. SCENE 1 → 2 : TAP TO BEGIN → BURST SEQUENCE
+       ===================================================================== */
+    const beginBtn = $('#begin-btn');
     const music = $('#bg-music');
-    const muteBtn = $('#btn-mute');
-    let musicEnabled = true;
-
-    function tryPlayMusic() {
-        if (!music) return;
-        music.volume = 0.5;
-        const p = music.play();
-        if (p && p.catch) p.catch(() => { /* no music file present or autoplay blocked — silently continue */ });
-    }
-
-    muteBtn.addEventListener('click', () => {
-        musicEnabled = !musicEnabled;
-        muteBtn.classList.toggle('is-muted', !musicEnabled);
-        if (!music) return;
-        if (musicEnabled) tryPlayMusic();
-        else music.pause();
-    });
-
-    let begun = false;
+    let started = false;
 
     function beginExperience() {
-        if (begun) return;
-        begun = true;
+        if (started) return;
+        started = true;
 
-        tryPlayMusic();
-        muteBtn.classList.add('show');
+        // attempt soft music start (best-effort; ignored if no source attached)
+        if (music.currentSrc || music.src) {
+            music.volume = 0.35;
+            music.play().catch(() => {});
+        }
 
-        // cinematic "camera zoom" — scale the whole body briefly
-        document.body.style.transition = 'transform 1.6s cubic-bezier(.22,.9,.32,1)';
-        document.body.style.transform = 'scale(1.06)';
-        setTimeout(() => { document.body.style.transform = 'scale(1)'; }, 900);
-
-        const cx = W / 2,
-            cy = H / 2;
-        spawnLensFlare(cx, cy);
-        spawnHeartBurst(cx, cy, 46, 1.2);
-        spawnGlitter(70);
-        spawnConfetti(50);
-        spawnFireworkHearts(cx, cy * 0.7);
-        spawnRoses(10);
-        spawnBubbles(10);
-        startAmbientLife();
-
-        setTimeout(() => {
-            goToScene('scene-name');
-            runNameReveal();
-        }, 900);
+        goTo('scene-burst');
+        playBurstSequence();
     }
 
-    $('#scene-gate').addEventListener('click', beginExperience);
-    $('#btn-begin').addEventListener('click', (e) => { e.stopPropagation();
-        beginExperience(); });
+    beginBtn.addEventListener('click', beginExperience);
+    scenes.loading.addEventListener('click', beginExperience);
 
-    /* ---------------------------------------------------------------
-       8. NAME REVEAL — letter by letter with sparkle trails
-    --------------------------------------------------------------- */
-    const NAME = 'VARSHHHH';
-    const lettersHost = $('#name-letters');
-    const combinedName = $('#name-combined');
-    let nameStarted = false;
+    function playBurstSequence() {
+        const burstScene = scenes.burst;
+        burstScene.classList.add('scene-burst-play');
 
-    function runNameReveal() {
-        if (nameStarted) return;
-        nameStarted = true;
+        // hearts explode from center
+        for (let i = 0; i < 26; i++) {
+            const angle = (Math.PI * 2 * i) / 26 + rand(-0.15, 0.15);
+            const dist = rand(120, window.innerWidth * 0.42);
+            spawnParticle({
+                parent: burstScene,
+                html: '❤',
+                className: pick(['p-heart', 'p-heart-gold']),
+                left: '50vw',
+                top: '50vh',
+                size: rand(16, 30),
+                duration: rand(1, 1.6),
+                delay: rand(0, 0.2),
+                animName: 'burstOut',
+                dx: Math.cos(angle) * dist + 'px',
+                dy: Math.sin(angle) * dist + 'px',
+                style: { position: 'absolute' },
+            });
+        }
 
-        lettersHost.innerHTML = '';
-        const spans = [...NAME].map(ch => {
-            const span = document.createElement('span');
-            span.className = 'ltr';
-            span.textContent = ch;
-            lettersHost.appendChild(span);
-            return span;
-        });
+        // glitter spread
+        for (let i = 0; i < 40; i++) {
+            const angle = rand(0, Math.PI * 2);
+            const dist = rand(80, window.innerWidth * 0.5);
+            spawnParticle({
+                parent: burstScene,
+                html: '',
+                className: 'p-glitter',
+                left: '50vw',
+                top: '50vh',
+                size: rand(4, 8),
+                duration: rand(1.2, 2),
+                delay: rand(0, 0.3),
+                animName: 'burstOut',
+                dx: Math.cos(angle) * dist + 'px',
+                dy: Math.sin(angle) * dist + 'px',
+                style: { position: 'absolute', borderRadius: '50%' },
+            });
+        }
 
-        spans.forEach((span, i) => {
+        // confetti
+        for (let i = 0; i < 30; i++) {
+            spawnParticle({
+                parent: burstScene,
+                html: '',
+                className: 'p-confetti',
+                left: rand(0, 100) + 'vw',
+                top: '-5vh',
+                size: rand(6, 10),
+                duration: rand(2.5, 4),
+                delay: rand(0, 1),
+                animName: 'fallDown',
+                dx: rand(-60, 60) + 'px',
+                rot: rand(360, 900) + 'deg',
+                style: {
+                    position: 'absolute',
+                    background: pick(['#ff4d8d', '#f5c26b', '#c77dff', '#fdf6ff']),
+                    width: rand(6, 10) + 'px',
+                    height: rand(10, 16) + 'px',
+                },
+            });
+        }
+
+        // roses falling
+        for (let i = 0; i < 12; i++) {
+            spawnParticle({
+                parent: burstScene,
+                html: '🌹',
+                className: 'p-rose',
+                left: rand(0, 100) + 'vw',
+                top: '-8vh',
+                size: rand(18, 28),
+                duration: rand(3.5, 5.5),
+                delay: rand(0, 1.5),
+                animName: 'fallDown',
+                dx: rand(-50, 50) + 'px',
+                rot: rand(-180, 180) + 'deg',
+                style: { position: 'absolute' },
+            });
+        }
+
+        // butterflies
+        for (let i = 0; i < 6; i++) {
+            const el = spawnParticle({
+                parent: burstScene,
+                html: '🦋',
+                className: 'p-butterfly',
+                left: rand(10, 90) + 'vw',
+                top: rand(30, 90) + 'vh',
+                size: rand(20, 30),
+                duration: rand(3, 4.5),
+                delay: rand(0.2, 1.2),
+                animName: 'floatUp',
+                dx: rand(-100, 100) + 'px',
+                style: { position: 'absolute' },
+            });
+            el.style.animation += `, flutter 0.6s ease-in-out infinite`;
+        }
+
+        // floating bubbles
+        for (let i = 0; i < 14; i++) {
+            spawnParticle({
+                parent: burstScene,
+                html: '',
+                className: 'p-bubble',
+                left: rand(0, 100) + 'vw',
+                top: '105vh',
+                size: rand(10, 26),
+                duration: rand(4, 7),
+                delay: rand(0, 1.5),
+                animName: 'floatUp',
+                dx: rand(-30, 30) + 'px',
+                style: { position: 'absolute', width: rand(10, 26) + 'px', height: rand(10, 26) + 'px' },
+            });
+        }
+
+        // heart-shaped fireworks (bursts appearing at random points, staggered)
+        const fireworkPoints = [
+            [rand(15, 35), rand(15, 35)],
+            [rand(65, 85), rand(20, 40)],
+            [rand(30, 70), rand(10, 25)],
+        ];
+        fireworkPoints.forEach(([lx, ly], idx) => {
             setTimeout(() => {
-                span.classList.add('show');
-                // sparkle trail at the letter's screen position
-                const rect = span.getBoundingClientRect();
-                let ticks = 0;
-                const trail = setInterval(() => {
-                    spawnSparkleTrail(rect.left + rect.width / 2 + rand(-6, 6), rect.top + rect.height / 2);
-                    ticks++;
-                    if (ticks > 6) clearInterval(trail);
-                }, 60);
-            }, i * 260);
+                for (let i = 0; i < 14; i++) {
+                    const angle = (Math.PI * 2 * i) / 14;
+                    const dist = rand(40, 90);
+                    spawnParticle({
+                        parent: burstScene,
+                        html: '❤',
+                        className: 'p-heart',
+                        left: lx + 'vw',
+                        top: ly + 'vh',
+                        size: rand(10, 16),
+                        duration: 1.1,
+                        animName: 'burstOut',
+                        dx: Math.cos(angle) * dist + 'px',
+                        dy: Math.sin(angle) * dist + 'px',
+                        style: { position: 'absolute' },
+                    });
+                }
+            }, idx * 450 + 300);
         });
 
-        const totalTime = spans.length * 260 + 900;
+        // move on to name reveal once the show settles
         setTimeout(() => {
-            combinedName.classList.add('show');
-            spawnGlitter(30);
-        }, totalTime);
-
-        setTimeout(() => {
-            goToScene('scene-message');
-            runMessages();
-        }, totalTime + 2200);
+            burstScene.classList.remove('scene-burst-play');
+            goTo('scene-name');
+            playNameReveal();
+        }, 2600);
     }
 
-    /* ---------------------------------------------------------------
-       9. LOVE MESSAGES — sequential fade transitions
-    --------------------------------------------------------------- */
-    const MESSAGES = [
-        'Every heartbeat reminds me of you.',
-        'Every smile begins with your name.',
-        'My world became beautiful because of you.',
-        'You are my favourite person.',
-        'I want to spend every tomorrow with you.',
-    ];
-    const messageText = $('#message-text');
-    const messageProgress = $('#message-progress');
+    /* =====================================================================
+       5. SCENE 3 : NAME REVEAL — letter by letter, with sparkle trails
+       ===================================================================== */
+    const NAME = 'V A R S H H H'.split(' '); // spelled with spaced display, joins to "Varshhhh"
+    const nameLettersEl = $('#name-letters');
+    const nameFinalEl = $('#name-final');
+    const nextBtn = $('.next-btn');
+
+    function playNameReveal() {
+        nameLettersEl.innerHTML = '';
+        nameFinalEl.classList.remove('show');
+        nextBtn.classList.remove('show');
+
+        NAME.forEach((ch, i) => {
+            const span = document.createElement('span');
+            span.className = 'letter';
+            span.textContent = ch;
+            span.style.animationDelay = `${i * 0.28}s`;
+            nameLettersEl.appendChild(span);
+
+            // sparkle trail as each letter lands
+            setTimeout(() => {
+                for (let s = 0; s < 5; s++) {
+                    spawnParticle({
+                        html: '✦',
+                        className: 'p-glitter',
+                        left: `calc(${nameLettersEl.getBoundingClientRect().left + span.offsetLeft}px)`,
+                        top: `calc(${nameLettersEl.getBoundingClientRect().top}px)`,
+                        size: rand(6, 10),
+                        duration: rand(0.8, 1.3),
+                        animName: 'burstOut',
+                        dx: rand(-30, 30) + 'px',
+                        dy: rand(-30, 10) + 'px',
+                        style: { position: 'fixed', borderRadius: '50%' },
+                    });
+                }
+            }, i * 280 + 500);
+        });
+
+        const totalDelay = NAME.length * 280 + 900;
+        setTimeout(() => nameFinalEl.classList.add('show'), totalDelay);
+        setTimeout(() => nextBtn.classList.add('show'), totalDelay + 500);
+    }
+
+    /* =====================================================================
+       6. SCENE 4 : LOVE MESSAGES — sequential smooth transitions
+       ===================================================================== */
+    const lines = $$('.love-line');
+    const dotsWrap = $('#message-dots');
     let messagesStarted = false;
 
-    function runMessages() {
+    lines.forEach((_, i) => {
+        const dot = document.createElement('span');
+        dot.dataset.i = i;
+        dotsWrap.appendChild(dot);
+    });
+    const dots = $$('span', dotsWrap);
+
+    function playMessages() {
         if (messagesStarted) return;
         messagesStarted = true;
-
-        messageProgress.innerHTML = MESSAGES.map(() => '<span></span>').join('');
-        const dots = [...messageProgress.children];
-
         let i = 0;
 
         function showNext() {
-            messageText.classList.remove('show');
-            dots.forEach(d => d.classList.remove('active'));
-            setTimeout(() => {
-                messageText.textContent = MESSAGES[i];
-                messageText.classList.add('show');
-                dots[i].classList.add('active');
-                i++;
-                if (i < MESSAGES.length) {
-                    setTimeout(showNext, 3000);
-                } else {
-                    setTimeout(() => {
-                        goToScene('scene-proposal');
-                        initProposal();
-                    }, 3200);
-                }
-            }, 350);
+            lines.forEach((l) => l.classList.remove('show'));
+            dots.forEach((d) => d.classList.remove('active'));
+            lines[i].classList.add('show');
+            dots[i].classList.add('active');
+            i++;
+            if (i < lines.length) {
+                setTimeout(showNext, 2600);
+            } else {
+                setTimeout(() => goTo('scene-proposal'), 3000);
+            }
         }
         showNext();
     }
 
-    /* ---------------------------------------------------------------
-       10. PROPOSAL — ring, YES (celebration) / NO (runs away)
-    --------------------------------------------------------------- */
-    const btnYes = $('#btn-yes');
-    const btnNo = $('#btn-no');
-    const proposalButtonsWrap = $('.proposal-buttons');
-    let proposalInit = false;
-
-    function initProposal() {
-        if (proposalInit) return;
-        proposalInit = true;
-
-        // place NO button in normal flow initially by positioning it absolutely
-        // within the viewport once the scene is visible, so runaway math is easy.
-        const rect = btnNo.getBoundingClientRect();
-        btnNo.style.position = 'fixed';
-        btnNo.style.left = rect.left + 'px';
-        btnNo.style.top = rect.top + 'px';
-        btnNo.classList.add('is-runaway');
-
-        function runAway() {
-            const bw = btnNo.offsetWidth,
-                bh = btnNo.offsetHeight;
-            const margin = 16;
-            const maxLeft = W - bw - margin;
-            const maxTop = H - bh - margin;
-            const newLeft = clamp(rand(margin, maxLeft), margin, maxLeft);
-            const newTop = clamp(rand(margin, maxTop), margin, maxTop);
-            btnNo.style.left = newLeft + 'px';
-            btnNo.style.top = newTop + 'px';
-        }
-
-        // playful dodge on hover/touch AND click — it truly cannot be pressed
-        ['mouseenter', 'pointerdown', 'click', 'touchstart'].forEach(evt => {
-            btnNo.addEventListener(evt, (e) => {
-                e.preventDefault();
-                runAway();
-            }, { passive: false });
-        });
-
-        btnYes.addEventListener('click', onYes);
-    }
-
-    function onYes() {
-        btnYes.disabled = true;
-        btnNo.style.transition = 'opacity .4s';
-        btnNo.style.opacity = '0';
-
-        const cx = W / 2,
-            cy = H * 0.5;
-        document.body.classList.add('screen-shake');
-        setTimeout(() => document.body.classList.remove('screen-shake'), 650);
-
-        spawnLensFlare(cx, cy);
-        spawnHeartBurst(cx, cy, 70, 1.6);
-        spawnFireworkHearts(cx, cy * 0.6);
-        setTimeout(() => spawnFireworkHearts(W * 0.25, H * 0.4), 300);
-        setTimeout(() => spawnFireworkHearts(W * 0.75, H * 0.45), 600);
-        spawnConfetti(90);
-        spawnRoses(18);
-        spawnGlitter(80);
-
-        // music swells emotionally (simple volume ramp — safe if music unavailable)
-        if (music) {
-            try {
-                let v = music.volume || 0.5;
-                const swell = setInterval(() => {
-                    v = clamp(v + 0.05, 0, 0.85);
-                    music.volume = v;
-                    if (v >= 0.85) clearInterval(swell);
-                }, 200);
-            } catch (e) { /* ignore if audio not supported */ }
-        }
-
-        setTimeout(() => {
-            goToScene('scene-final');
-            spawnHeartBurst(W / 2, H * 0.3, 30, 1);
-            const keepGoing = setInterval(() => {
-                if (!$('#scene-final').classList.contains('scene--active')) { clearInterval(keepGoing); return; }
-                spawnHeartBurst(rand(W * 0.2, W * 0.8), H + 20, 3, 0.6);
-            }, 1200);
-        }, 1800);
-    }
-
-    /* ---------------------------------------------------------------
-       11. Skip-ahead: allow tapping name/message scenes to move faster
-           (nice UX touch — doesn't skip the proposal itself)
-    --------------------------------------------------------------- */
-    $('#scene-name').addEventListener('click', () => {
-        if (combinedName.classList.contains('show')) {
-            goToScene('scene-message');
-            runMessages();
-        }
+    /* wire up "Continue" from name scene -> messages */
+    nextBtn.addEventListener('click', () => {
+        goTo('scene-messages');
+        playMessages();
     });
 
+    /* =====================================================================
+       7. SCENE 5 : FINAL PROPOSAL — YES / NO interactions
+       ===================================================================== */
+    const yesBtn = $('#yes-btn');
+    const noBtn = $('#no-btn');
+    const choiceRow = $('.choice-row');
+
+    // NO button playfully evades the pointer
+    function dodge() {
+        const rowRect = choiceRow.getBoundingClientRect();
+        const btnRect = noBtn.getBoundingClientRect();
+        const margin = 12;
+        const maxLeft = window.innerWidth - btnRect.width - margin;
+        const maxTop = window.innerHeight - btnRect.height - margin;
+        const newLeft = rand(margin, maxLeft);
+        const newTop = rand(margin, maxTop);
+
+        if (!noBtn.classList.contains('runaway')) {
+            noBtn.classList.add('runaway');
+            // freeze current visual position before switching to fixed
+            noBtn.style.left = btnRect.left + 'px';
+            noBtn.style.top = btnRect.top + 'px';
+            // force reflow then animate to new spot
+            requestAnimationFrame(() => {
+                noBtn.style.left = newLeft + 'px';
+                noBtn.style.top = newTop + 'px';
+            });
+        } else {
+            noBtn.style.left = newLeft + 'px';
+            noBtn.style.top = newTop + 'px';
+        }
+    }
+
+    noBtn.addEventListener('pointerenter', dodge);
+    noBtn.addEventListener('click', (e) => { e.preventDefault();
+        dodge(); });
+    noBtn.addEventListener('touchstart', (e) => { e.preventDefault();
+        dodge(); }, { passive: false });
+
+    yesBtn.addEventListener('click', () => {
+        playYesSequence();
+    });
+
+    function playYesSequence() {
+        // gentle screen shake
+        body.classList.add('shake');
+        setTimeout(() => body.classList.remove('shake'), 650);
+
+        // emotional music swell (best-effort)
+        if (music.currentSrc || music.src) {
+            music.volume = 0.6;
+        }
+
+        // heart explosion + fireworks + confetti + roses, reused from burst sequence
+        const layer = field; // use the persistent field so it renders above proposal scene
+        for (let i = 0; i < 40; i++) {
+            const angle = rand(0, Math.PI * 2);
+            const dist = rand(100, window.innerWidth * 0.5);
+            spawnParticle({
+                parent: layer,
+                html: '❤',
+                className: pick(['p-heart', 'p-heart-gold']),
+                left: '50vw',
+                top: '50vh',
+                size: rand(16, 30),
+                duration: rand(1.2, 1.8),
+                animName: 'burstOut',
+                dx: Math.cos(angle) * dist + 'px',
+                dy: Math.sin(angle) * dist + 'px',
+                style: { position: 'fixed' },
+            });
+        }
+        for (let i = 0; i < 36; i++) {
+            spawnParticle({
+                parent: layer,
+                html: '',
+                className: 'p-confetti',
+                left: rand(0, 100) + 'vw',
+                top: '-5vh',
+                size: rand(6, 10),
+                duration: rand(2.5, 4),
+                delay: rand(0, 0.8),
+                animName: 'fallDown',
+                style: {
+                    position: 'fixed',
+                    background: pick(['#ff4d8d', '#f5c26b', '#c77dff', '#fdf6ff']),
+                    width: rand(6, 10) + 'px',
+                    height: rand(10, 16) + 'px',
+                },
+            });
+        }
+        for (let i = 0; i < 10; i++) {
+            spawnParticle({
+                parent: layer,
+                html: '🌹',
+                className: 'p-rose',
+                left: rand(0, 100) + 'vw',
+                top: '-8vh',
+                size: rand(18, 26),
+                duration: rand(3.5, 5),
+                delay: rand(0, 1),
+                animName: 'fallDown',
+                style: { position: 'fixed' },
+            });
+        }
+        // celebratory heart fireworks bursts
+        [
+            [20, 25],
+            [80, 30],
+            [50, 15]
+        ].forEach(([lx, ly], idx) => {
+            setTimeout(() => {
+                for (let i = 0; i < 16; i++) {
+                    const angle = (Math.PI * 2 * i) / 16;
+                    const dist = rand(50, 100);
+                    spawnParticle({
+                        parent: layer,
+                        html: '❤',
+                        className: 'p-heart-gold',
+                        left: lx + 'vw',
+                        top: ly + 'vh',
+                        size: rand(10, 16),
+                        duration: 1.2,
+                        animName: 'burstOut',
+                        dx: Math.cos(angle) * dist + 'px',
+                        dy: Math.sin(angle) * dist + 'px',
+                        style: { position: 'fixed' },
+                    });
+                }
+            }, idx * 400 + 200);
+        });
+
+        setTimeout(() => goTo('scene-final'), 1600);
+    }
+
+    /* =====================================================================
+       8. INIT
+       ===================================================================== */
+    goTo('scene-loading');
 })();
